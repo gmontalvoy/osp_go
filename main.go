@@ -2,50 +2,51 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"log"
+	"strings"
 
-	"github.com/rackspace/gophercloud"
-	"github.com/rackspace/gophercloud/openstack"
-	"github.com/rackspace/gophercloud/openstack/compute/v2/servers"
+	"github.com/gophercloud/gophercloud"
+
+	"github.com/gophercloud/gophercloud/openstack"
+	"github.com/gophercloud/gophercloud/openstack/identity/v3/projects"
 )
 
 func main() {
 	// Auth
-	opts, err := openstack.AuthOptionsFromEnv()
+	authOpts, err := openstack.AuthOptionsFromEnv()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Provider
-	provider, err := openstack.AuthenticatedClient(opts)
+	provider, err := openstack.AuthenticatedClient(authOpts)
+
+	// Clients
+	// Identity
+	opts := gophercloud.EndpointOpts{}
+	identityClient, err := openstack.NewIdentityV3(provider, opts)
+
+	// Compute
+
+	listOpts := projects.ListOpts{
+		Enabled: gophercloud.Enabled,
+	}
+
+	allPages, err := projects.List(identityClient, listOpts).AllPages()
 	if err != nil {
 		panic(err)
 	}
 
-	// Client
-	computeClient, err := openstack.NewComputeV2(provider, gophercloud.EndpointOpts{
-		Region: os.Getenv("OS_REGION_NAME"),
-	})
+	allProjects, err := projects.ExtractProjects(allPages)
 	if err != nil {
 		panic(err)
 	}
 
-	// Listing
-	listOpts := servers.ListOpts{
-		AllTenants: true,
+	for _, project := range allProjects {
+		p := strings.Contains(project.Name, "-project")
+		if p == true {
+			fmt.Printf("Project Name: %v\n", project.Name)
+		}
 	}
 
-	allPages, err := servers.List(computeClient, listOpts).AllPages()
-	if err != nil {
-		panic(err)
-	}
-
-	allServers, err := servers.ExtractServers(allPages)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, server := range allServers {
-		fmt.Printf("%+v\n", server)
-	}
 }
